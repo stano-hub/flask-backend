@@ -1,57 +1,77 @@
-from flask import *
+from flask import Flask, request, jsonify
+import pymysql
 import pymysql.cursors
 from flask_cors import CORS
 import os
+import requests
+from requests.auth import HTTPBasicAuth
+import datetime
+import base64
 
+# Initialize Flask app
 app = Flask(__name__)
 CORS(app)
-import pymysql
-import pymysql.cursors
 
-app.config['UPLOAD_FOLDER'] = 'mysite/static/images'
+# Configure upload folder
+app.config['UPLOAD_FOLDER'] = os.path.join(os.getcwd(), 'mysite/static/images')
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-@app.route('/api/signup' , methods=['POST'])
+
+# ======================== SIGNUP ROUTE ========================
+@app.route('/api/signup', methods=['POST'])
 def signup():
-    # receive data which has been send to server in the request
     username = request.form['username']
     email = request.form['email']
     password = request.form['password']
     phone = request.form['phone']
 
-    connection = pymysql.connect(host='Jacecarrison.mysql.pythonanywhere-services.com' , user='Jacecarrison' , password='Modcom25' , database='Jacecarrison$default')
+    connection = pymysql.connect(
+        host='Jacecarrison.mysql.pythonanywhere-services.com',
+        user='Jacecarrison',
+        password='Modcom25',
+        database='Jacecarrison$default'
+    )
 
     cursor = connection.cursor()
-    sql ='insert into users(username,email ,password,phone ) values(%s,%s,%s,%s)'
-
+    sql = 'INSERT INTO users(username, email, password, phone) VALUES (%s, %s, %s, %s)'
     data = (username, email, password, phone)
-
     cursor.execute(sql, data)
     connection.commit()
 
+    cursor.close()
+    connection.close()
 
-    return jsonify({"success": "Thank you for joning"})
+    return jsonify({"success": "Thank you for joining!"})
 
-@app.route('/api/signin' , methods=['POST'])
+
+# ======================== SIGNIN ROUTE ========================
+@app.route('/api/signin', methods=['POST'])
 def signin():
     email = request.form['email']
     password = request.form['password']
 
-    connection = pymysql.connect(host='Jacecarrison.mysql.pythonanywhere-services.com' , user='Jacecarrison' , password='Modcom25' , database='Jacecarrison$default')
+    connection = pymysql.connect(
+        host='Jacecarrison.mysql.pythonanywhere-services.com',
+        user='Jacecarrison',
+        password='Modcom25',
+        database='Jacecarrison$default'
+    )
 
-    cursor =  connection.cursor(pymysql.cursors.DictCursor)
-    sql= 'select * from users where email  = %s and password=%s'
-    data=(email,password)
-    cursor.execute(sql, data)
+    cursor = connection.cursor(pymysql.cursors.DictCursor)
+    sql = 'SELECT * FROM users WHERE email = %s AND password = %s'
+    cursor.execute(sql, (email, password))
 
-    count = cursor.rowcount
+    user = cursor.fetchone()
+    cursor.close()
+    connection.close()
 
-    if count == 0:
-        return jsonify({"message" : data})
+    if user:
+        return jsonify({"message": "login successful", "user": user})
     else:
-        user = cursor.fetchone()
-        return jsonify({"message" : "login successful" , "user":user})
+        return jsonify({"message": "Invalid email or password"}), 401
 
 
+# ======================== ADD PRODUCT ROUTE ========================
 @app.route('/api/add_product', methods=['POST'])
 def add_product():
     product_name = request.form['product_name']
@@ -60,98 +80,94 @@ def add_product():
     photo = request.files['product_photo']
 
     filename = photo.filename
-
-    photo_path= os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    photo_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     photo.save(photo_path)
 
-    # connect to db
-    connection = pymysql.connect(host='Jacecarrison.mysql.pythonanywhere-services.com', user='Jacecarrison',password='Modcom25', database='Jacecarrison$default')
+    connection = pymysql.connect(
+        host='Jacecarrison.mysql.pythonanywhere-services.com',
+        user='Jacecarrison',
+        password='Modcom25',
+        database='Jacecarrison$default'
+    )
+
     cursor = connection.cursor()
-
-    sql = 'insert into product_details(product_name, product_description, product_cost, product_photo) values (%s,%s,%s,%s)'
-    data= (product_name, product_description, product_cost, filename)
-    cursor.execute(sql, data)
+    sql = 'INSERT INTO product_details(product_name, product_description, product_cost, product_photo) VALUES (%s, %s, %s, %s)'
+    cursor.execute(sql, (product_name, product_description, product_cost, filename))
     connection.commit()
-    return jsonify({"success": "product details added successfully"})
 
-@app.route('/api/get_product_details' , methods=['GET'])
+    cursor.close()
+    connection.close()
+
+    return jsonify({"success": "Product details added successfully"})
+
+
+# ======================== GET PRODUCTS ROUTE ========================
+@app.route('/api/get_product_details', methods=['GET'])
 def get_product_details():
-    connection = pymysql.connect(host='Jacecarrison.mysql.pythonanywhere-services.com' , user='Jacecarrison' , password='Modcom25', database='Jacecarrison$default')
+    connection = pymysql.connect(
+        host='Jacecarrison.mysql.pythonanywhere-services.com',
+        user='Jacecarrison',
+        password='Modcom25',
+        database='Jacecarrison$default'
+    )
+
     cursor = connection.cursor(pymysql.cursors.DictCursor)
-
-    sql='select * from product_details'
-
+    sql = 'SELECT * FROM product_details'
     cursor.execute(sql)
 
-    product_details = cursor. fetchall()
+    product_details = cursor.fetchall()
+
+    cursor.close()
+    connection.close()
+
     return jsonify(product_details)
 
-    # Mpesa Payment Route
 
-import requests
-from requests.auth import HTTPBasicAuth
-import datetime
-import base64
-
-
+# ======================== MPESA PAYMENT ROUTE ========================
 @app.route('/api/mpesa_payment', methods=['POST'])
 def mpesa_payment():
-    if request.method == 'POST':
-        # Extract POST Values sent
-        amount = request.form['amount']
-        phone = request.form['phone']
+    amount = request.form['amount']
+    phone = request.form['phone']
 
-        # Provide consumer_key and consumer_secret provided by safaricom
-        consumer_key = "GTWADFxIpUfDoNikNGqq1C3023evM6UH"
-        consumer_secret = "amFbAoUByPV2rM5A"
+    consumer_key = "GTWADFxIpUfDoNikNGqq1C3023evM6UH"
+    consumer_secret = "amFbAoUByPV2rM5A"
 
-        # Authenticate Yourself using above credentials to Safaricom Services, and Bearer Token this is used by safaricom for security identification purposes - Your are given Access
-        api_URL = "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials"  # AUTH URL
-        # Provide your consumer_key and consumer_secret
-        response = requests.get(api_URL, auth=HTTPBasicAuth(consumer_key, consumer_secret))
-        # Get response as Dictionary
-        data = response.json()
-        # Retrieve the Provide Token
-        # Token allows you to proceed with the transaction
-        access_token = "Bearer" + ' ' + data['access_token']
+    api_URL = "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials"
+    response = requests.get(api_URL, auth=HTTPBasicAuth(consumer_key, consumer_secret))
+    data = response.json()
+    access_token = "Bearer " + data['access_token']
 
-        #  GETTING THE PASSWORD
-        timestamp = datetime.datetime.today().strftime('%Y%m%d%H%M%S')  # Current Time
-        passkey = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919'  # Passkey(Safaricom Provided)
-        business_short_code = "174379"  # Test Paybile (Safaricom Provided)
-        # Combine above 3 Strings to get data variable
-        data = business_short_code + passkey + timestamp
-        # Encode to Base64
-        encoded = base64.b64encode(data.encode())
-        password = encoded.decode()
+    timestamp = datetime.datetime.today().strftime('%Y%m%d%H%M%S')
+    passkey = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919'
+    business_short_code = "174379"
+    combined_data = business_short_code + passkey + timestamp
+    password = base64.b64encode(combined_data.encode()).decode()
 
-        # BODY OR PAYLOAD
-        payload = {
-            "BusinessShortCode": "174379",
-            "Password":password,
-            "Timestamp": timestamp,
-            "TransactionType": "CustomerPayBillOnline",
-            "Amount": "1",  # use 1 when testing
-            "PartyA": phone,  # change to your number
-            "PartyB": "174379",
-            "PhoneNumber": phone,
-            "CallBackURL": "https://coding.co.ke/api/confirm.php",
-            "AccountReference": "SokoGarden Online",
-            "TransactionDesc": "Payments for Products"
-        }
+    payload = {
+        "BusinessShortCode": business_short_code,
+        "Password": password,
+        "Timestamp": timestamp,
+        "TransactionType": "CustomerPayBillOnline",
+        "Amount": amount,
+        "PartyA": phone,
+        "PartyB": business_short_code,
+        "PhoneNumber": phone,
+        "CallBackURL": "https://coding.co.ke/api/confirm.php",
+        "AccountReference": "SokoGarden Online",
+        "TransactionDesc": "Payments for Products"
+    }
 
-        # POPULAING THE HTTP HEADER, PROVIDE THE TOKEN ISSUED EARLIER
-        headers = {
-            "Authorization": access_token,
-            "Content-Type": "application/json"
-        }
+    headers = {
+        "Authorization": access_token,
+        "Content-Type": "application/json"
+    }
 
-        # Specify STK Push  Trigger URL
-        url = "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest"
-        # Create a POST Request to above url, providing headers, payload
-        # Below triggers an STK Push to the phone number indicated in the payload and the amount.
-        response = requests.post(url, json=payload, headers=headers)
-        print(response.text) #
-        # Give a Response
-        return jsonify({"message": "An MPESA Prompt has been sent to Your Phone, Please Check & Complete Payment"})
-# app.run(debug=True)
+    url = "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest"
+    response = requests.post(url, json=payload, headers=headers)
+
+    return jsonify({"message": "An MPESA Prompt has been sent to your phone, please check & complete payment"})
+
+
+# ======================== MAIN ========================
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 5000)), debug=False)
