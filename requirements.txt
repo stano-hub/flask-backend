@@ -3,3 +3,5 @@ flask-cors
 pymysql
 requests
 gunicorn
+psycopg2-binary
+requests
