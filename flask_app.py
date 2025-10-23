@@ -3,13 +3,6 @@ from flask_cors import CORS
 import os
 from dotenv import load_dotenv
 
-# Import routes
-from routes.teachers import teachers_bp
-from routes.classes import classes_bp
-from routes.students import students_bp
-from routes.attendance import attendance_bp
-from routes.analytics import analytics_bp
-
 # Load environment variables
 load_dotenv()
 
@@ -18,17 +11,22 @@ load_dotenv()
 # ==========================
 app = Flask(__name__)
 CORS(app)
-
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "your_jwt_secret_key_here")
 
 # ==========================
-# 🔗 Register Blueprints
+# 🔗 Import and Register Blueprints
 # ==========================
-app.register_blueprint(teachers_bp)
-app.register_blueprint(classes_bp)
-app.register_blueprint(students_bp)
-app.register_blueprint(attendance_bp)
-app.register_blueprint(analytics_bp)
+from routes.teachers import teacher_bp
+from routes.classes import class_bp
+from routes.students import student_bp
+from routes.attendance import attendance_bp
+from routes.analytics import analytics_bp
+
+app.register_blueprint(teacher_bp, url_prefix="/teachers")
+app.register_blueprint(class_bp, url_prefix="/classes")
+app.register_blueprint(student_bp, url_prefix="/students")
+app.register_blueprint(attendance_bp, url_prefix="/attendance")
+app.register_blueprint(analytics_bp, url_prefix="/analytics")
 
 # ==========================
 # 🏠 Root Endpoint
